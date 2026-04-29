@@ -101,7 +101,7 @@ Vite + React,职责:让用户输入来源、加载文档、把数据交给 `<Fig
 |---|---|---|
 | [x] | 顶层 layout(左侧来源面板 + 中间画布 + 顶部 page 选择器) | `packages/web/src/App.tsx` |
 | [x] | 平移 + 缩放画布(⌘/Ctrl+滚轮缩放、拖拽平移) | `packages/web/src/components/Canvas.tsx` |
-| [x] | 来源面板(API 表单 + JSON 文件上传) | `packages/web/src/components/SourcePanel.tsx` |
+| [x] | 来源面板(API 表单 + 本地文件上传:`.json` / `.figma` 走 JSON 路径,`.fig` 二进制经 `openfig-core` 解析后转为 REST 形 bundle) | `packages/web/src/components/SourcePanel.tsx` + `packages/web/src/figConverter.ts` |
 | [x] | 页面切换器 | `packages/web/src/components/PageSelector.tsx` |
 | [x] | Zustand 全局状态(bundle / pageId / zoom / loading / error) | `packages/web/src/state/store.ts` |
 | [x] | 节点 hover 高亮 / 节点检查器 | `Canvas.tsx` 事件委托 `[data-figma-id]` + `<style>` 注入 outline 高亮;`NodeInspector.tsx` 右侧面板展示选中节点的 type/bounds/fills/strokes/opacity/cornerRadius/characters 等 |
@@ -112,7 +112,7 @@ Vite + React,职责:让用户输入来源、加载文档、把数据交给 `<Fig
 | 里程碑 | 状态 | 备注 |
 |---|---|---|
 | **M1** 脚手架(workspace + TS + Vite + Express) | [x] | `pnpm install` / typecheck / build 全绿 |
-| **M2** 数据通路(fetcher + server/load + web 表单) | [x] | API 与本地 JSON 两路均通 |
+| **M2** 数据通路(fetcher + server/load + web 表单) | [x] | API + 本地 `.json`/`.figma` + 本地 `.fig` 二进制(openfig-core)三路均通 |
 | **M3** 基础节点(Frame/Rectangle/Text + paint/stroke/cornerRadius) | [x] | 全部上述类型可渲染 |
 | **M4** Auto Layout(flexbox) | [x] | 含 grow / stretch / wrap |
 | **M5** 矢量与图像(Vector/BooleanOp + Image fill) | [x] | 内联 SVG + 导出 SVG 两策略 |
@@ -132,6 +132,7 @@ Vite + React,职责:让用户输入来源、加载文档、把数据交给 `<Fig
 | [x] | `zustand` | 前端状态 |
 | [x] | `vitest` | 单测 |
 | [ ] | `@testing-library/react` | 计划但未引入(暂未写组件渲染测试) |
+| [x] | `openfig-core`(MIT,逆向工程) | 在 web 包内解析 `.fig` 二进制(ZIP + kiwi-schema + zstd),转换为 REST 形 bundle 后交给现有 renderer;转换为有损/尽力而为 |
 
 ## 验证(端到端)
 
@@ -140,7 +141,7 @@ Vite + React,职责:让用户输入来源、加载文档、把数据交给 `<Fig
 | [x] | 单元测试 vitest 覆盖每个样式转换器 | **41 个测试通过**(core 12 + renderer 29);覆盖 paint(含 4 种渐变)、stroke(含 dashPattern)、effect、autoLayout、cornerRadius、text 主分支、constraints (5 种水平 × 5 种垂直 + 旋转回退)、mask、core 解析与节点索引、`resolveInstance` (含 VARIANT / INSTANCE_SWAP) |
 | [ ] | 集成测试:`fixtures/sample.json` jsdom 渲染断言 | 未编写 |
 | [~] | 手工视觉回归:真实文件 + Figma PNG 对比 | **工具已就绪**(web 端 Compare 模式),开发环境无 token 未实跑;用户在本地用真实 token 运行即可 |
-| [x] | 冒烟:`pnpm -r typecheck && pnpm -r test && pnpm build` | 全绿;web bundle ~165 kB |
+| [x] | 冒烟:`pnpm -r typecheck && pnpm -r test && pnpm build` | 全绿;web bundle ~210 kB / gzip 70 kB(引入 openfig-core 后从 180/58 增长) |
 | [x] | server `/api/health` 启动验证 | 通过 |
 
 ## 不在本计划范围(明确不做)
@@ -153,6 +154,7 @@ Vite + React,职责:让用户输入来源、加载文档、把数据交给 `<Fig
 ## 当前已知缺口(后续工作)
 
 1. **集成测试**(jsdom + 完整 fixture 渲染)未编写。
+2. **`.fig` 转换是有损的**:跳过了逐字符文本样式覆盖(textData.lines)、矢量 path 几何(可后续接入 openfig 的 `resolveVectorNodePaths` 填充 `fillGeometry`)、SYMBOL_SET variant 匹配。当前覆盖:层级、命名/类型映射、绝对坐标(沿父链累乘 2D 仿射矩阵)、SOLID/IMAGE/GRADIENT_* fills、strokes、effects、cornerRadius、auto-layout(stackMode→layoutMode)、文本基础样式、images Map(filename→dataURL,paint.imageRef = SHA-1 hex)。
 
 ## 待修改的关键文件汇总
 

@@ -76,8 +76,13 @@ export function SourcePanel() {
       </form>
       <hr style={{ margin: "16px 0", borderColor: "#333" }} />
       <label style={{ ...labelStyle, cursor: "pointer" }}>
-        Or load JSON file
-        <input type="file" accept="application/json" onChange={handleFile} style={{ marginTop: 6 }} />
+        Or load local file (.fig / .figma / .json)
+        <input
+          type="file"
+          accept=".fig,.figma,.json,application/json"
+          onChange={handleFile}
+          style={{ marginTop: 6 }}
+        />
       </label>
       {error && <p style={{ color: "#ff7b72", marginTop: 12, fontSize: 12 }}>{error}</p>}
     </div>

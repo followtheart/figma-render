@@ -1,4 +1,5 @@
 import type { FigmaBundle } from "@figma-render/core";
+import { figBytesToBundle, looksLikeFigBinary } from "./figConverter.js";
 
 interface ApiError {
   error: { message?: string; status?: number };
@@ -44,10 +45,44 @@ export async function exportPng(
   return json.exports;
 }
 
-/** Build a FigmaBundle from a user-provided JSON file (no API access). */
+/** Build a FigmaBundle from a user-provided JSON file (no API access).
+ *  Accepts both `.json` and `.figma` extensions — the latter being a common
+ *  convention for files saved from the Figma REST API. The Figma desktop
+ *  app's binary `.fig` format is NOT supported (it is proprietary and
+ *  unrelated to the REST API JSON shape). */
 export async function loadFromLocalFile(file: File): Promise<FigmaBundle> {
-  const text = await file.text();
-  const parsed = JSON.parse(text) as Record<string, unknown>;
+  const buf = await file.arrayBuffer();
+  const bytes = new Uint8Array(buf);
+
+  // .fig is a ZIP archive — sniff the magic bytes regardless of extension and
+  // route to the binary parser.
+  if (looksLikeFigBinary(bytes)) {
+    try {
+      return figBytesToBundle(bytes, file.name);
+    } catch (err) {
+      throw new Error(
+        `Failed to parse ${file.name} as a Figma .fig file: ${(err as Error).message}`,
+      );
+    }
+  }
+
+  // Otherwise treat as JSON (.json / .figma — Figma REST API response).
+  let text: string;
+  try {
+    text = new TextDecoder("utf-8", { fatal: true }).decode(bytes);
+  } catch {
+    throw new Error(
+      `${file.name} is not a recognized format. Expected a Figma REST API JSON response (.json/.figma) or a desktop .fig binary.`,
+    );
+  }
+  let parsed: Record<string, unknown>;
+  try {
+    parsed = JSON.parse(text) as Record<string, unknown>;
+  } catch {
+    throw new Error(
+      `${file.name} is not a JSON document. Expected a Figma REST API JSON response (.json/.figma) or a desktop .fig binary (ZIP).`,
+    );
+  }
   const root = ("document" in parsed ? parsed : (parsed.file as Record<string, unknown>)) ?? {};
   if (!root || !("document" in root)) throw new Error("Missing 'document' field in JSON");
   return {

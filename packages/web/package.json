@@ -12,6 +12,7 @@
   "dependencies": {
     "@figma-render/core": "workspace:*",
     "@figma-render/renderer": "workspace:*",
+    "openfig-core": "^0.3.6",
     "react": "^18.3.1",
     "react-dom": "^18.3.1",
     "zustand": "^4.5.4"
