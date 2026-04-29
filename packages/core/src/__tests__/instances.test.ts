@@ -137,3 +137,150 @@ describe("resolveInstance", () => {
     expect(resolved.children).toEqual([]);
   });
 });
+
+// Fixture exercising VARIANT (COMPONENT_SET → child COMPONENT) + nested INSTANCE_SWAP.
+const fileWithVariantsAndSwap = JSON.stringify({
+  name: "Demo",
+  lastModified: "",
+  version: "1",
+  document: {
+    id: "0:0",
+    name: "Document",
+    type: "DOCUMENT",
+    children: [
+      {
+        id: "0:1",
+        name: "Page 1",
+        type: "CANVAS",
+        children: [
+          // An icon library: two alternative icon components for INSTANCE_SWAP.
+          {
+            id: "ICON:A",
+            name: "IconA",
+            type: "COMPONENT",
+            children: [{ id: "ICON:A:1", name: "glyphA", type: "TEXT", characters: "A" }],
+          },
+          {
+            id: "ICON:B",
+            name: "IconB",
+            type: "COMPONENT",
+            children: [{ id: "ICON:B:1", name: "glyphB", type: "TEXT", characters: "B" }],
+          },
+          // A COMPONENT_SET (Button) with two variants: State=Default, State=Hover.
+          {
+            id: "BTN:SET",
+            name: "Button",
+            type: "COMPONENT_SET",
+            children: [
+              {
+                id: "BTN:DEFAULT",
+                name: "State=Default",
+                type: "COMPONENT",
+                children: [
+                  {
+                    id: "BTN:DEFAULT:LBL",
+                    name: "Label",
+                    type: "TEXT",
+                    characters: "Default",
+                  },
+                  // Nested instance whose mainComponent is overridable via INSTANCE_SWAP.
+                  {
+                    id: "BTN:DEFAULT:ICON",
+                    name: "Icon",
+                    type: "INSTANCE",
+                    componentId: "ICON:A",
+                    componentPropertyReferences: { mainComponent: "Glyph#9:0" },
+                  },
+                ],
+              },
+              {
+                id: "BTN:HOVER",
+                name: "State=Hover",
+                type: "COMPONENT",
+                children: [
+                  {
+                    id: "BTN:HOVER:LBL",
+                    name: "Label",
+                    type: "TEXT",
+                    characters: "Hover",
+                  },
+                  {
+                    id: "BTN:HOVER:ICON",
+                    name: "Icon",
+                    type: "INSTANCE",
+                    componentId: "ICON:A",
+                    componentPropertyReferences: { mainComponent: "Glyph#9:0" },
+                  },
+                ],
+              },
+            ],
+          },
+          // Instance pointing at the Default variant; asks for Hover via VARIANT
+          // and swaps the icon to ICON:B via INSTANCE_SWAP.
+          {
+            id: "USE:1",
+            name: "Btn use",
+            type: "INSTANCE",
+            componentId: "BTN:DEFAULT",
+            componentProperties: {
+              State: { type: "VARIANT", value: "Hover" },
+              "Glyph#9:0": { type: "INSTANCE_SWAP", value: "ICON:B" },
+            },
+          },
+        ],
+      },
+    ],
+  },
+  components: {},
+  componentSets: {},
+  styles: {},
+});
+
+describe("resolveInstance + VARIANT + INSTANCE_SWAP", () => {
+  it("VARIANT switches the master to the matching sibling COMPONENT", () => {
+    const file = parseFigmaJson(fileWithVariantsAndSwap);
+    const idx = indexDocument(file);
+    const inst = getInstance(idx, "USE:1");
+    const resolved = resolveInstance(inst, idx.byId, idx.parentOf);
+    expect(resolved.children).toHaveLength(2);
+    const label = resolved.children[0] as Node & { characters?: string };
+    // Confirms we cloned from BTN:HOVER (variant), not BTN:DEFAULT.
+    expect(label.characters).toBe("Hover");
+  });
+
+  it("INSTANCE_SWAP rebinds a nested INSTANCE descendant to a new master", () => {
+    const file = parseFigmaJson(fileWithVariantsAndSwap);
+    const idx = indexDocument(file);
+    const inst = getInstance(idx, "USE:1");
+    const resolved = resolveInstance(inst, idx.byId, idx.parentOf);
+    // Second child is the nested icon INSTANCE, now backed by ICON:B.
+    const icon = resolved.children[1] as Node & {
+      componentId?: string;
+      children?: readonly Node[];
+    };
+    expect(icon.componentId).toBe("ICON:B");
+    // Re-resolved subtree should mirror ICON:B's child glyph.
+    expect(icon.children).toHaveLength(1);
+    const glyph = icon.children![0] as Node & { characters?: string };
+    expect(glyph.characters).toBe("B");
+  });
+
+  it("missing parentOf still works (legacy two-arg call) but skips VARIANT", () => {
+    const file = parseFigmaJson(fileWithVariantsAndSwap);
+    const idx = indexDocument(file);
+    const inst = getInstance(idx, "USE:1");
+    const resolved = resolveInstance(inst, idx.byId);
+    const label = resolved.children[0] as Node & { characters?: string };
+    // Without parentOf, VARIANT cannot swap masters, so we fall back to BTN:DEFAULT.
+    expect(label.characters).toBe("Default");
+  });
+
+  it("does not mutate either variant master", () => {
+    const file = parseFigmaJson(fileWithVariantsAndSwap);
+    const idx = indexDocument(file);
+    resolveInstance(getInstance(idx, "USE:1"), idx.byId, idx.parentOf);
+    const hoverMaster = idx.byId.get("BTN:HOVER") as Node & { children: readonly Node[] };
+    const hoverIcon = hoverMaster.children[1] as Node & { componentId?: string };
+    expect(hoverIcon.componentId).toBe("ICON:A");
+  });
+});

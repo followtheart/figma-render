@@ -19,7 +19,7 @@ interface FigmaRendererProps {
 export function FigmaRenderer({ bundle, pageId, className, style }: FigmaRendererProps) {
   const ctx = useMemo<RenderContextValue>(() => {
     const idx = indexDocument({ ...bundle } as never);
-    return { bundle, nodesById: idx.byId };
+    return { bundle, nodesById: idx.byId, parentOf: idx.parentOf };
   }, [bundle]);
 
   const pages: Node[] = useMemo(() => {

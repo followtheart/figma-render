@@ -40,7 +40,7 @@ figma-render/
 | [x] | `loadFromJsonFile` Node 端文件读取(隔离至 `core/node` 子入口避免污染浏览器) | `packages/core/src/fetcher/file.ts` |
 | [x] | `indexDocument` 节点扁平化、parentMap、page 收集 | `packages/core/src/normalize/tree.ts` |
 | [x] | `surveyAssets` 收集 imageRefs 与 vector 导出候选 | `packages/core/src/normalize/assets.ts` |
-| [x] | Component/Instance 主组件引用与 overrides 合并 | `packages/core/src/normalize/instances.ts` `resolveInstance()`:无 children 时按 `componentId` 找 master 并克隆子树(id 重映射),并把 `componentProperties`(TEXT / BOOLEAN)沿 `componentPropertyReferences` 应用到后代 |
+| [x] | Component/Instance 主组件引用与 overrides 合并 | `packages/core/src/normalize/instances.ts` `resolveInstance()`:无 children 时按 `componentId` 找 master 并克隆子树(id 重映射);沿 `componentPropertyReferences` 应用 `componentProperties`(TEXT / BOOLEAN);**VARIANT** 按 COMPONENT_SET 子节点名称(`State=Hover, Size=Large`)匹配兴弟 COMPONENT 并重新克隆 master;**INSTANCE_SWAP** 重绑嵌套 INSTANCE 后街的 `mainComponent` 并递归 resolve 新 master |
 
 **注意**:Figma API token 仅在后端使用,不出现在前端代码或 bundle。**[x] 已落实**(token 走 `/api/figma/load`,服务端透传给 `api.figma.com`,不存储)。
 
@@ -57,7 +57,7 @@ figma-render/
 | `VECTOR` / `BOOLEAN_OPERATION` | `<VectorNode>` | [x] | `fillGeometry` → 内联 SVG;否则用 `/v1/images` 导出的 SVG |
 | `TEXT` | `<TextNode>` | [x] | 含混合样式 span 拆分 |
 | `COMPONENT` / `COMPONENT_SET` | `<FrameNode>` | [x] | 等同 Frame |
-| `INSTANCE` | `<InstanceNode>` | [x] | 通过 `resolveInstance` 处理:无 children 时克隆 master 子树并按 `componentProperties` 合并 overrides,然后走 Frame 渲染 |
+| `INSTANCE` | `<InstanceNode>` | [x] | 通过 `resolveInstance` 处理:VARIANT 换 master 、无 children 时克隆 master 子树、按 `componentProperties`(TEXT/BOOLEAN/INSTANCE_SWAP)合并 overrides,然后走 Frame 渲染 |
 | FigJam (`STICKY` 等) | `<ShapeNode>` 兜底 | [~] | 走默认分支不崩,但样式简化 |
 | `SLICE` | `null` | [x] | 不渲染 |
 
@@ -117,7 +117,7 @@ Vite + React,职责:让用户输入来源、加载文档、把数据交给 `<Fig
 | **M4** Auto Layout(flexbox) | [x] | 含 grow / stretch / wrap |
 | **M5** 矢量与图像(Vector/BooleanOp + Image fill) | [x] | 内联 SVG + 导出 SVG 两策略 |
 | **M6** 文本细节(混合样式、字体降级) | [x] | run 拆分 + Helvetica/系统降级栈 |
-| **M7** Component/Instance | [x] | `resolveInstance` 处理 master 克隆 + `componentProperties`(TEXT / BOOLEAN)合并;`INSTANCE_SWAP` / `VARIANT` 留作后续 |
+| **M7** Component/Instance | [x] | `resolveInstance` 处理 master 克隆 + `componentProperties`(TEXT / BOOLEAN / **INSTANCE_SWAP** / **VARIANT**)全量合并 |
 | **M8** Effects/Mask/Blend | [x] | Effects + Blend + Mask(SVG mask-image)完成 |
 | **M9** 画布交互(平移缩放 + page) | [x] | 节点 hover/选中未做 |
 | **M10** 打磨与样例 | [~] | README 与 plan 文档存在;**真实 Figma 文件回归未做** |
@@ -137,7 +137,7 @@ Vite + React,职责:让用户输入来源、加载文档、把数据交给 `<Fig
 
 | 状态 | 验证项 | 实际情况 |
 |---|---|---|
-| [x] | 单元测试 vitest 覆盖每个样式转换器 | **29 个测试通过**;覆盖 paint(含 4 种渐变)、stroke(含 dashPattern)、effect、autoLayout、cornerRadius、text 主分支、constraints (5 种水平 × 5 种垂直 + 旋转回退)、mask、core 解析与节点索引 |
+| [x] | 单元测试 vitest 覆盖每个样式转换器 | **41 个测试通过**(core 12 + renderer 29);覆盖 paint(含 4 种渐变)、stroke(含 dashPattern)、effect、autoLayout、cornerRadius、text 主分支、constraints (5 种水平 × 5 种垂直 + 旋转回退)、mask、core 解析与节点索引、`resolveInstance` (含 VARIANT / INSTANCE_SWAP) |
 | [ ] | 集成测试:`fixtures/sample.json` jsdom 渲染断言 | 未编写 |
 | [ ] | 手工视觉回归:真实文件 + Figma PNG 对比 | 因环境无 token 未执行,需用户在本地完成 |
 | [x] | 冒烟:`pnpm -r typecheck && pnpm -r test && pnpm build` | 全绿;web bundle ~165 kB |
@@ -152,10 +152,9 @@ Vite + React,职责:让用户输入来源、加载文档、把数据交给 `<Fig
 
 ## 当前已知缺口(后续工作)
 
-1. **Component / Instance overrides** — TEXT / BOOLEAN 通过 `componentProperties` 已合并;**`INSTANCE_SWAP`** 与 **`VARIANT`** 属性未实现(需要在解析时替换 master 节点本身)。
-2. **节点交互**(hover 高亮、选中、节点检查器)未做。
-3. **真实 Figma 文件视觉回归**未在本仓库环境内执行。
-4. **集成测试**(jsdom + 完整 fixture 渲染)未编写。
+1. **节点交互**(hover 高亮、选中、节点检查器)未做。
+2. **真实 Figma 文件视觉回归**未在本仓库环境内执行。
+3. **集成测试**(jsdom + 完整 fixture 渲染)未编写。
 
 ## 待修改的关键文件汇总
 

@@ -21,8 +21,8 @@ interface InstanceNodeProps {
 export function InstanceNode({ node, parent }: InstanceNodeProps) {
   const ctx = useRenderContext();
   const resolved = useMemo(
-    () => resolveInstance(node, ctx.nodesById),
-    [node, ctx.nodesById],
+    () => resolveInstance(node, ctx.nodesById, ctx.parentOf),
+    [node, ctx.nodesById, ctx.parentOf],
   );
   return <FrameNode node={resolved} parent={parent} />;
 }
