@@ -6,6 +6,7 @@ export function SourcePanel() {
   const setBundle = useAppStore((s) => s.setBundle);
   const setLoading = useAppStore((s) => s.setLoading);
   const setError = useAppStore((s) => s.setError);
+  const setStoreToken = useAppStore((s) => s.setToken);
   const loading = useAppStore((s) => s.loading);
   const error = useAppStore((s) => s.error);
 
@@ -20,6 +21,9 @@ export function SourcePanel() {
     try {
       const bundle = await loadFromApi(fileKey.trim(), token.trim());
       setBundle(bundle);
+      // Retain the token in memory so the compare feature can reuse it for
+      // /api/figma/export without re-prompting. Never persisted to storage.
+      setStoreToken(token.trim());
     } catch (err) {
       setError((err as Error).message);
     } finally {

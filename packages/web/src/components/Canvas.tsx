@@ -1,4 +1,4 @@
-import { useEffect, useRef, useState, type WheelEvent, type MouseEvent } from "react";
+import { useEffect, useLayoutEffect, useRef, useState, type WheelEvent, type MouseEvent } from "react";
 import { FigmaRenderer } from "@figma-render/renderer";
 import { useAppStore } from "../state/store.js";
 
@@ -17,6 +17,9 @@ export function Canvas() {
   const selectedId = useAppStore((s) => s.selectedId);
   const setHovered = useAppStore((s) => s.setHovered);
   const setSelected = useAppStore((s) => s.setSelected);
+  const compareMode = useAppStore((s) => s.compareMode);
+  const compareOpacity = useAppStore((s) => s.compareOpacity);
+  const compareImages = useAppStore((s) => s.compareImages);
 
   const [pan, setPan] = useState({ x: 0, y: 0 });
   const drag = useRef<{
@@ -82,6 +85,12 @@ export function Canvas() {
     setSelected(id);
   };
 
+  // Resolve the compare target: prefer the selected node, fall back to the page.
+  // Strip the override suffix (`;I0`) to match canonical Figma ids used as keys.
+  const compareTargetId = canonicalId(selectedId ?? pageId);
+  const compareUrl =
+    compareMode !== "off" && compareTargetId ? compareImages[compareTargetId] : undefined;
+
   return (
     <div
       style={canvasStyle}
@@ -96,13 +105,121 @@ export function Canvas() {
         style={{
           transform: `translate(${pan.x}px, ${pan.y}px) scale(${zoom})`,
           transformOrigin: "0 0",
+          position: "relative",
         }}
       >
         <FigmaRenderer bundle={bundle} pageId={pageId ?? undefined} />
+        {compareUrl && compareTargetId && (
+          <CompareOverlay
+            targetId={compareTargetId}
+            url={compareUrl}
+            mode={compareMode}
+            opacity={compareOpacity}
+          />
+        )}
       </div>
       <div style={zoomBadge}>{Math.round(zoom * 100)}% · ⌘/Ctrl+wheel to zoom · drag to pan · click to select</div>
     </div>
   );
+}
+
+/** Strip the override suffix that resolveInstance appends (e.g. `200:1;I0`). */
+function canonicalId(id: string | null): string | null {
+  if (!id) return null;
+  const semi = id.indexOf(";");
+  return semi === -1 ? id : id.slice(0, semi);
+}
+
+/**
+ * Render the Figma-API PNG aligned to the matching node:
+ * - "side": placed to the right of the node, same height, page-coords.
+ * - "overlay": absolutely positioned on top of the node with adjustable opacity.
+ *
+ * We measure the matching `[data-figma-id]` element's offset within the
+ * transformed inner div via getBoundingClientRect (then dividing by zoom)
+ * so the image lives in the same coordinate system as the renderer output
+ * and inherits the canvas scale/translate.
+ */
+function CompareOverlay({
+  targetId,
+  url,
+  mode,
+  opacity,
+}: {
+  targetId: string;
+  url: string;
+  mode: "side" | "overlay" | "off";
+  opacity: number;
+}) {
+  const [rect, setRect] = useState<{ x: number; y: number; w: number; h: number } | null>(null);
+  const ref = useRef<HTMLDivElement | null>(null);
+  const zoom = useAppStore((s) => s.zoom);
+
+  useLayoutEffect(() => {
+    // The element we measure may be a clone produced by resolveInstance, in
+    // which case its real DOM id includes a `;Ixxx` suffix. We try the bare
+    // canonical id first (matches the master node) and fall back to a prefix
+    // selector for instance-clone descendants.
+    const sel = `[data-figma-id="${cssEscape(targetId)}"]`;
+    const root = ref.current?.parentElement;
+    if (!root) return;
+    let el = root.querySelector(sel) as HTMLElement | null;
+    if (!el) {
+      el = root.querySelector(`[data-figma-id^="${cssEscape(targetId)};"]`) as HTMLElement | null;
+    }
+    if (!el) {
+      setRect(null);
+      return;
+    }
+    const eb = el.getBoundingClientRect();
+    const rb = root.getBoundingClientRect();
+    // getBoundingClientRect returns post-transform pixels, so divide by zoom
+    // to get coordinates inside the un-scaled inner div.
+    setRect({
+      x: (eb.left - rb.left) / zoom,
+      y: (eb.top - rb.top) / zoom,
+      w: eb.width / zoom,
+      h: eb.height / zoom,
+    });
+  }, [targetId, url, zoom]);
+
+  if (mode === "off" || !rect) return <div ref={ref} style={{ display: "none" }} />;
+
+  const common: React.CSSProperties = {
+    position: "absolute",
+    left: mode === "side" ? rect.x + rect.w + 24 : rect.x,
+    top: rect.y,
+    width: rect.w,
+    height: rect.h,
+    pointerEvents: "none",
+    imageRendering: "pixelated",
+  };
+
+  return (
+    <>
+      <div ref={ref} style={{ display: "none" }} />
+      {mode === "side" && (
+        <div
+          style={{
+            ...common,
+            outline: "2px dashed rgba(255,255,255,0.25)",
+          }}
+        >
+          <img src={url} alt="Figma render" style={imgStyle} />
+          <span style={badgeStyle}>Figma /v1/images</span>
+        </div>
+      )}
+      {mode === "overlay" && (
+        <img src={url} alt="Figma render overlay" style={{ ...common, opacity }} />
+      )}
+    </>
+  );
+}
+
+/** Minimal CSS.escape polyfill — tokens and ids may contain `:` etc. */
+function cssEscape(s: string): string {
+  if (typeof CSS !== "undefined" && typeof CSS.escape === "function") return CSS.escape(s);
+  return s.replace(/([!"#$%&'()*+,./:;<=>?@[\\\]^`{|}~])/g, "\\$1");
 }
 
 /**
@@ -171,4 +288,21 @@ const zoomBadge: React.CSSProperties = {
   fontSize: 11,
   color: "#bbb",
   pointerEvents: "none",
+};
+
+const imgStyle: React.CSSProperties = {
+  width: "100%",
+  height: "100%",
+  display: "block",
+};
+
+const badgeStyle: React.CSSProperties = {
+  position: "absolute",
+  top: 4,
+  left: 4,
+  background: "rgba(0,0,0,0.7)",
+  color: "#fff",
+  fontSize: 10,
+  padding: "2px 6px",
+  borderRadius: 3,
 };

@@ -20,6 +20,30 @@ export async function loadFromApi(
   return (await res.json()) as FigmaBundle;
 }
 
+/**
+ * Request PNG renders of `ids` from the Figma `/v1/images` API via our server proxy.
+ * Returns a `nodeId -> signed S3 URL` map. Image URLs expire (~30 min) and are
+ * fetched directly by the browser without auth.
+ */
+export async function exportPng(
+  fileKey: string,
+  token: string,
+  ids: string[],
+  scale = 2,
+): Promise<Record<string, string>> {
+  const res = await fetch("/api/figma/export", {
+    method: "POST",
+    headers: { "content-type": "application/json" },
+    body: JSON.stringify({ fileKey, token, ids, format: "png", scale }),
+  });
+  if (!res.ok) {
+    const data = (await res.json().catch(() => ({}))) as Partial<ApiError>;
+    throw new Error(data.error?.message ?? `HTTP ${res.status}`);
+  }
+  const json = (await res.json()) as { exports: Record<string, string> };
+  return json.exports;
+}
+
 /** Build a FigmaBundle from a user-provided JSON file (no API access). */
 export async function loadFromLocalFile(file: File): Promise<FigmaBundle> {
   const text = await file.text();

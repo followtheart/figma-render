@@ -2,6 +2,7 @@ import { SourcePanel } from "./components/SourcePanel.js";
 import { PageSelector } from "./components/PageSelector.js";
 import { Canvas } from "./components/Canvas.js";
 import { NodeInspector } from "./components/NodeInspector.js";
+import { CompareToolbar } from "./components/CompareToolbar.js";
 
 export function App() {
   return (
@@ -9,6 +10,7 @@ export function App() {
       <SourcePanel />
       <div style={{ flex: 1, display: "flex", flexDirection: "column", minWidth: 0 }}>
         <PageSelector />
+        <CompareToolbar />
         <Canvas />
       </div>
       <NodeInspector />

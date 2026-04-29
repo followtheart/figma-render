@@ -105,7 +105,7 @@ Vite + React,职责:让用户输入来源、加载文档、把数据交给 `<Fig
 | [x] | 页面切换器 | `packages/web/src/components/PageSelector.tsx` |
 | [x] | Zustand 全局状态(bundle / pageId / zoom / loading / error) | `packages/web/src/state/store.ts` |
 | [x] | 节点 hover 高亮 / 节点检查器 | `Canvas.tsx` 事件委托 `[data-figma-id]` + `<style>` 注入 outline 高亮;`NodeInspector.tsx` 右侧面板展示选中节点的 type/bounds/fills/strokes/opacity/cornerRadius/characters 等 |
-| [ ] | "对比模式":Figma `/v1/images` PNG 与渲染结果并排比对 | 未实现 |
+| [x] | "对比模式":Figma `/v1/images` PNG 与渲染结果并排/叠加比对 | `packages/web/src/components/CompareToolbar.tsx` + `Canvas.tsx` `<CompareOverlay>`;支持 Off/Side/Overlay 三模式、1x–4x 渲染缩放、Overlay 不透明度滑杆;目标节点为当前选中节点(回退到 page 根),token 在 SourcePanel 加载后驻留内存供复用,signed S3 URL 由 `/api/figma/export` 透传 |
 
 ## 增量推进顺序(里程碑)
 
@@ -139,7 +139,7 @@ Vite + React,职责:让用户输入来源、加载文档、把数据交给 `<Fig
 |---|---|---|
 | [x] | 单元测试 vitest 覆盖每个样式转换器 | **41 个测试通过**(core 12 + renderer 29);覆盖 paint(含 4 种渐变)、stroke(含 dashPattern)、effect、autoLayout、cornerRadius、text 主分支、constraints (5 种水平 × 5 种垂直 + 旋转回退)、mask、core 解析与节点索引、`resolveInstance` (含 VARIANT / INSTANCE_SWAP) |
 | [ ] | 集成测试:`fixtures/sample.json` jsdom 渲染断言 | 未编写 |
-| [ ] | 手工视觉回归:真实文件 + Figma PNG 对比 | 因环境无 token 未执行,需用户在本地完成 |
+| [~] | 手工视觉回归:真实文件 + Figma PNG 对比 | **工具已就绪**(web 端 Compare 模式),开发环境无 token 未实跑;用户在本地用真实 token 运行即可 |
 | [x] | 冒烟:`pnpm -r typecheck && pnpm -r test && pnpm build` | 全绿;web bundle ~165 kB |
 | [x] | server `/api/health` 启动验证 | 通过 |
 
@@ -152,8 +152,7 @@ Vite + React,职责:让用户输入来源、加载文档、把数据交给 `<Fig
 
 ## 当前已知缺口(后续工作)
 
-1. **真实 Figma 文件视觉回归**未在本仓库环境内执行。
-2. **集成测试**(jsdom + 完整 fixture 渲染)未编写。
+1. **集成测试**(jsdom + 完整 fixture 渲染)未编写。
 
 ## 待修改的关键文件汇总
 
