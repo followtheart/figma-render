@@ -73,7 +73,7 @@ figma-render/
 | `text.ts` (`textStyleToCss`, `verticalAlignToCss`) | [x] | `style/text.ts` | font-family/weight/italic/size,line-height (PIXELS/PERCENT),letterSpacing,textAlign(含 JUSTIFIED),textCase(UPPER/LOWER/TITLE/SMALL_CAPS),textDecoration(UNDERLINE/STRIKETHROUGH),vertical align,字体降级回退到系统栈 |
 | `cornerRadius.ts` | [x] | `style/cornerRadius.ts` | uniform `cornerRadius` 与 per-corner `rectangleCornerRadii` |
 | `blend.ts` | [x] | `style/blend.ts` | 全部 16 种 blendMode 映射到 `mix-blend-mode` |
-| `mask.ts` | [ ] | — | **未实现**:`isMask` → `clip-path` / 父级 `mask-image` |
+| `mask.ts` | [x] | `style/mask.ts` | `isMask` → 用 SVG `mask-image` 包裹后续兄弟节点;支持 RECTANGLE(含 cornerRadius)、ELLIPSE、VECTOR/BOOLEAN_OPERATION(`fillGeometry`)。Auto Layout 父容器下回退到普通渲染避免破坏 flex 流 |
 
 混合文本样式:**[x]** `<TextNode>` 用 `characterStyleOverrides` + `styleOverrideTable` 把同样式的相邻字符合并为一个 span。
 
@@ -118,7 +118,7 @@ Vite + React,职责:让用户输入来源、加载文档、把数据交给 `<Fig
 | **M5** 矢量与图像(Vector/BooleanOp + Image fill) | [x] | 内联 SVG + 导出 SVG 两策略 |
 | **M6** 文本细节(混合样式、字体降级) | [x] | run 拆分 + Helvetica/系统降级栈 |
 | **M7** Component/Instance | [x] | `resolveInstance` 处理 master 克隆 + `componentProperties`(TEXT / BOOLEAN)合并;`INSTANCE_SWAP` / `VARIANT` 留作后续 |
-| **M8** Effects/Mask/Blend | [~] | Effects + Blend 完成;**Mask 未实现** |
+| **M8** Effects/Mask/Blend | [x] | Effects + Blend + Mask(SVG mask-image)完成 |
 | **M9** 画布交互(平移缩放 + page) | [x] | 节点 hover/选中未做 |
 | **M10** 打磨与样例 | [~] | README 与 plan 文档存在;**真实 Figma 文件回归未做** |
 
@@ -152,13 +152,12 @@ Vite + React,职责:让用户输入来源、加载文档、把数据交给 `<Fig
 
 ## 当前已知缺口(后续工作)
 
-1. **Mask** (`isMask`) 渲染未实现 — 当前作为普通节点渲染,会出现遮挡偏差。
-2. **Constraints**(非 Auto Layout 父容器下子节点的 LEFT/RIGHT/TOP/BOTTOM/SCALE/STRETCH 锚点)未翻译 — 当前一律按 `relativeTransform` 或 absoluteBoundingBox 差值定位,父容器缩放时不会保持锚点。
-3. **Stroke dashPattern** 仅切换 `dashed` 样式,未根据 `[dash, gap]` 自定义。
-4. **Component / Instance overrides** — TEXT / BOOLEAN 通过 `componentProperties` 已合并;**`INSTANCE_SWAP`** 与 **`VARIANT`** 属性未实现(需要在解析时替换 master 节点本身)。
-5. **节点交互**(hover 高亮、选中、节点检查器)未做。
-6. **真实 Figma 文件视觉回归**未在本仓库环境内执行。
-7. **集成测试**(jsdom + 完整 fixture 渲染)未编写。
+1. **Constraints**(非 Auto Layout 父容器下子节点的 LEFT/RIGHT/TOP/BOTTOM/SCALE/STRETCH 锚点)未翻译 — 当前一律按 `relativeTransform` 或 absoluteBoundingBox 差值定位,父容器缩放时不会保持锚点。
+2. **Stroke dashPattern** 仅切换 `dashed` 样式,未根据 `[dash, gap]` 自定义。
+3. **Component / Instance overrides** — TEXT / BOOLEAN 通过 `componentProperties` 已合并;**`INSTANCE_SWAP`** 与 **`VARIANT`** 属性未实现(需要在解析时替换 master 节点本身)。
+4. **节点交互**(hover 高亮、选中、节点检查器)未做。
+5. **真实 Figma 文件视觉回归**未在本仓库环境内执行。
+6. **集成测试**(jsdom + 完整 fixture 渲染)未编写。
 
 ## 待修改的关键文件汇总
 
