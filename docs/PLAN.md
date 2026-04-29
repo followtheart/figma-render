@@ -104,7 +104,7 @@ Vite + React,职责:让用户输入来源、加载文档、把数据交给 `<Fig
 | [x] | 来源面板(API 表单 + JSON 文件上传) | `packages/web/src/components/SourcePanel.tsx` |
 | [x] | 页面切换器 | `packages/web/src/components/PageSelector.tsx` |
 | [x] | Zustand 全局状态(bundle / pageId / zoom / loading / error) | `packages/web/src/state/store.ts` |
-| [ ] | 节点 hover 高亮 / 节点检查器 | 计划保留为后续扩展 |
+| [x] | 节点 hover 高亮 / 节点检查器 | `Canvas.tsx` 事件委托 `[data-figma-id]` + `<style>` 注入 outline 高亮;`NodeInspector.tsx` 右侧面板展示选中节点的 type/bounds/fills/strokes/opacity/cornerRadius/characters 等 |
 | [ ] | "对比模式":Figma `/v1/images` PNG 与渲染结果并排比对 | 未实现 |
 
 ## 增量推进顺序(里程碑)
@@ -119,7 +119,7 @@ Vite + React,职责:让用户输入来源、加载文档、把数据交给 `<Fig
 | **M6** 文本细节(混合样式、字体降级) | [x] | run 拆分 + Helvetica/系统降级栈 |
 | **M7** Component/Instance | [x] | `resolveInstance` 处理 master 克隆 + `componentProperties`(TEXT / BOOLEAN / **INSTANCE_SWAP** / **VARIANT**)全量合并 |
 | **M8** Effects/Mask/Blend | [x] | Effects + Blend + Mask(SVG mask-image)完成 |
-| **M9** 画布交互(平移缩放 + page) | [x] | 节点 hover/选中未做 |
+| **M9** 画布交互(平移缩放 + page) | [x] | 含 hover 高亮、点击选中与右侧节点检查器 |
 | **M10** 打磨与样例 | [~] | README 与 plan 文档存在;**真实 Figma 文件回归未做** |
 
 ## 第三方依赖(关键)
@@ -152,9 +152,8 @@ Vite + React,职责:让用户输入来源、加载文档、把数据交给 `<Fig
 
 ## 当前已知缺口(后续工作)
 
-1. **节点交互**(hover 高亮、选中、节点检查器)未做。
-2. **真实 Figma 文件视觉回归**未在本仓库环境内执行。
-3. **集成测试**(jsdom + 完整 fixture 渲染)未编写。
+1. **真实 Figma 文件视觉回归**未在本仓库环境内执行。
+2. **集成测试**(jsdom + 完整 fixture 渲染)未编写。
 
 ## 待修改的关键文件汇总
 

@@ -1,6 +1,7 @@
 import { SourcePanel } from "./components/SourcePanel.js";
 import { PageSelector } from "./components/PageSelector.js";
 import { Canvas } from "./components/Canvas.js";
+import { NodeInspector } from "./components/NodeInspector.js";
 
 export function App() {
   return (
@@ -10,6 +11,7 @@ export function App() {
         <PageSelector />
         <Canvas />
       </div>
+      <NodeInspector />
     </div>
   );
 }
