@@ -100,17 +100,138 @@ interface AbsoluteBoxParent {
 interface AbsoluteBoxNode extends AbsoluteBoxParent {
   size?: { x: number; y: number };
   relativeTransform?: readonly (readonly number[])[]; // 2x3 affine
+  constraints?: { horizontal?: string; vertical?: string };
+}
+
+/** Returns true when the relativeTransform is a pure translation (no rotation/skew/flip). */
+function isAxisAligned(m: readonly (readonly number[])[] | undefined): boolean {
+  if (!m || m.length < 2) return true;
+  const a = m[0]?.[0] ?? 1;
+  const b = m[1]?.[0] ?? 0;
+  const c = m[0]?.[1] ?? 0;
+  const d = m[1]?.[1] ?? 1;
+  const eps = 1e-4;
+  return Math.abs(b) < eps && Math.abs(c) < eps && Math.abs(a - 1) < eps && Math.abs(d - 1) < eps;
+}
+
+/**
+ * Translate a Figma `constraints` pair into CSS positioning so the child
+ * preserves its anchor when the parent resizes.
+ *
+ *   horizontal: LEFT  -> left: x;        width: w;
+ *               RIGHT -> right: pw-(x+w); width: w;
+ *               LEFT_RIGHT -> left + right (stretch);
+ *               CENTER -> calc(50% + offset); width: w;
+ *               SCALE  -> left%, width%;
+ *   vertical analogous (TOP / BOTTOM / TOP_BOTTOM / CENTER / SCALE).
+ */
+function constraintsToPositionCss(
+  node: AbsoluteBoxNode,
+  parent: AbsoluteBoxParent,
+): React.CSSProperties | null {
+  const cs = node.constraints;
+  if (!cs) return null;
+  const pBox = parent.absoluteBoundingBox;
+  if (!pBox) return null;
+  const w = node.size?.x ?? node.absoluteBoundingBox?.width;
+  const h = node.size?.y ?? node.absoluteBoundingBox?.height;
+  if (w == null || h == null) return null;
+
+  // Local x,y of node's top-left within parent's coordinate space.
+  let x: number;
+  let y: number;
+  if (node.relativeTransform && node.relativeTransform.length >= 2) {
+    x = node.relativeTransform[0]?.[2] ?? 0;
+    y = node.relativeTransform[1]?.[2] ?? 0;
+  } else if (node.absoluteBoundingBox) {
+    x = node.absoluteBoundingBox.x - pBox.x;
+    y = node.absoluteBoundingBox.y - pBox.y;
+  } else {
+    return null;
+  }
+
+  const pw = pBox.width;
+  const ph = pBox.height;
+  const out: React.CSSProperties = { position: "absolute" };
+
+  switch (cs.horizontal) {
+    case "RIGHT":
+      out.right = round(pw - (x + w), 3);
+      out.width = round(w, 3);
+      break;
+    case "LEFT_RIGHT":
+      out.left = round(x, 3);
+      out.right = round(pw - (x + w), 3);
+      break;
+    case "CENTER": {
+      // Distance from parent center to child's left edge.
+      const centerOffset = x + w / 2 - pw / 2;
+      out.left = `calc(50% + ${round(centerOffset - w / 2, 3)}px)`;
+      out.width = round(w, 3);
+      break;
+    }
+    case "SCALE":
+      out.left = pw > 0 ? `${round((x / pw) * 100, 4)}%` : 0;
+      out.width = pw > 0 ? `${round((w / pw) * 100, 4)}%` : round(w, 3);
+      break;
+    case "LEFT":
+    default:
+      out.left = round(x, 3);
+      out.width = round(w, 3);
+      break;
+  }
+
+  switch (cs.vertical) {
+    case "BOTTOM":
+      out.bottom = round(ph - (y + h), 3);
+      out.height = round(h, 3);
+      break;
+    case "TOP_BOTTOM":
+      out.top = round(y, 3);
+      out.bottom = round(ph - (y + h), 3);
+      break;
+    case "CENTER": {
+      const centerOffset = y + h / 2 - ph / 2;
+      out.top = `calc(50% + ${round(centerOffset - h / 2, 3)}px)`;
+      out.height = round(h, 3);
+      break;
+    }
+    case "SCALE":
+      out.top = ph > 0 ? `${round((y / ph) * 100, 4)}%` : 0;
+      out.height = ph > 0 ? `${round((h / ph) * 100, 4)}%` : round(h, 3);
+      break;
+    case "TOP":
+    default:
+      out.top = round(y, 3);
+      out.height = round(h, 3);
+      break;
+  }
+
+  return out;
 }
 
 /**
  * Position a child inside a non-Auto-Layout parent.
- * Uses relativeTransform when present (preserves rotation), otherwise falls back
- * to deriving x/y from absoluteBoundingBox.
+ *
+ * Strategy:
+ *   1. If the child's `relativeTransform` is axis-aligned (no rotation/skew/flip)
+ *      and we have parent + child bounding boxes, translate Figma `constraints`
+ *      into CSS top/right/bottom/left so the anchor is preserved when the
+ *      parent resizes.
+ *   2. Otherwise (rotated or no constraints info) fall back to a CSS
+ *      `matrix()` derived from `relativeTransform`.
+ *   3. Final fallback: difference of `absoluteBoundingBox` for plain x/y.
  */
 export function absolutePositionToCss(
   node: AbsoluteBoxNode,
   parent: AbsoluteBoxParent,
 ): React.CSSProperties {
+  // Prefer constraints when geometry is axis-aligned — preserves anchors.
+  if (isAxisAligned(node.relativeTransform)) {
+    const cs = constraintsToPositionCss(node, parent);
+    if (cs) return cs;
+  }
+
   const out: React.CSSProperties = { position: "absolute" };
   const size = node.size
     ? { w: node.size.x, h: node.size.y }

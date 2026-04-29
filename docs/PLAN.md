@@ -68,7 +68,7 @@ figma-render/
 | `paint.ts` (`paintsToBackground`) | [x] | `style/paint.ts` | SOLID;LINEAR/RADIAL/ANGULAR/DIAMOND 渐变(DIAMOND 用 radial 近似);IMAGE 的 FILL/FIT/TILE/STRETCH;多 paint 多层合成 |
 | `stroke.ts` (`strokeToCss`) | [~] | `style/stroke.ts` | 实线、虚线、`strokeAlign` (INSIDE→border / OUTSIDE→box-shadow / CENTER→border)、`individualStrokeWeights`。**虚线 dashPattern 未细分**(只切换 dashed) |
 | `effect.ts` (`effectsToCss`) | [x] | `style/effect.ts` | DROP/INNER_SHADOW、LAYER_BLUR、BACKGROUND_BLUR(→ `backdrop-filter`) |
-| `layout.ts` (`autoLayoutToCss` / `autoLayoutChildToCss` / `absolutePositionToCss`) | [~] | `style/layout.ts` | Auto Layout(direction/align/padding/gap/wrap/grow/stretch)。**未实现**:`constraints` (LEFT/RIGHT/TOP/BOTTOM/CENTER/SCALE/STRETCH) → 锚点定位 |
+| `layout.ts` (`autoLayoutToCss` / `autoLayoutChildToCss` / `absolutePositionToCss`) | [x] | `style/layout.ts` | Auto Layout(direction/align/padding/gap/wrap/grow/stretch);`constraints` (LEFT/RIGHT/CENTER/LEFT_RIGHT/SCALE × TOP/BOTTOM/CENTER/TOP_BOTTOM/SCALE) → CSS top/right/bottom/left + calc(50%+offset) / 百分比，锁定父容器缩放时的锚点;旋转/镜像节点回退到 `relativeTransform` matrix() |
 | `transform.ts` | [x] | 合并到 `layout.ts` 的 `absolutePositionToCss` | `relativeTransform` 2x3 → CSS `matrix()` + `transform-origin: 0 0` |
 | `text.ts` (`textStyleToCss`, `verticalAlignToCss`) | [x] | `style/text.ts` | font-family/weight/italic/size,line-height (PIXELS/PERCENT),letterSpacing,textAlign(含 JUSTIFIED),textCase(UPPER/LOWER/TITLE/SMALL_CAPS),textDecoration(UNDERLINE/STRIKETHROUGH),vertical align,字体降级回退到系统栈 |
 | `cornerRadius.ts` | [x] | `style/cornerRadius.ts` | uniform `cornerRadius` 与 per-corner `rectangleCornerRadii` |
@@ -137,7 +137,7 @@ Vite + React,职责:让用户输入来源、加载文档、把数据交给 `<Fig
 
 | 状态 | 验证项 | 实际情况 |
 |---|---|---|
-| [~] | 单元测试 vitest 覆盖每个样式转换器 | **18 个测试通过**;覆盖 paint(含 4 种渐变)、stroke、effect、autoLayout、cornerRadius、text 主分支、core 解析与节点索引。**未覆盖** constraints / mask / 复杂 transform |
+| [x] | 单元测试 vitest 覆盖每个样式转换器 | **24 个测试通过**;覆盖 paint(含 4 种渐变)、stroke、effect、autoLayout、cornerRadius、text 主分支、constraints (5 种水平 × 5 种垂直 + 旋转回退)、mask、core 解析与节点索引 |
 | [ ] | 集成测试:`fixtures/sample.json` jsdom 渲染断言 | 未编写 |
 | [ ] | 手工视觉回归:真实文件 + Figma PNG 对比 | 因环境无 token 未执行,需用户在本地完成 |
 | [x] | 冒烟:`pnpm -r typecheck && pnpm -r test && pnpm build` | 全绿;web bundle ~165 kB |
@@ -152,12 +152,11 @@ Vite + React,职责:让用户输入来源、加载文档、把数据交给 `<Fig
 
 ## 当前已知缺口(后续工作)
 
-1. **Constraints**(非 Auto Layout 父容器下子节点的 LEFT/RIGHT/TOP/BOTTOM/SCALE/STRETCH 锚点)未翻译 — 当前一律按 `relativeTransform` 或 absoluteBoundingBox 差值定位,父容器缩放时不会保持锚点。
-2. **Stroke dashPattern** 仅切换 `dashed` 样式,未根据 `[dash, gap]` 自定义。
-3. **Component / Instance overrides** — TEXT / BOOLEAN 通过 `componentProperties` 已合并;**`INSTANCE_SWAP`** 与 **`VARIANT`** 属性未实现(需要在解析时替换 master 节点本身)。
-4. **节点交互**(hover 高亮、选中、节点检查器)未做。
-5. **真实 Figma 文件视觉回归**未在本仓库环境内执行。
-6. **集成测试**(jsdom + 完整 fixture 渲染)未编写。
+1. **Stroke dashPattern** 仅切换 `dashed` 样式,未根据 `[dash, gap]` 自定义。
+2. **Component / Instance overrides** — TEXT / BOOLEAN 通过 `componentProperties` 已合并;**`INSTANCE_SWAP`** 与 **`VARIANT`** 属性未实现(需要在解析时替换 master 节点本身)。
+3. **节点交互**(hover 高亮、选中、节点检查器)未做。
+4. **真实 Figma 文件视觉回归**未在本仓库环境内执行。
+5. **集成测试**(jsdom + 完整 fixture 渲染)未编写。
 
 ## 待修改的关键文件汇总
 
