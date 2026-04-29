@@ -40,7 +40,7 @@ figma-render/
 | [x] | `loadFromJsonFile` Node 端文件读取(隔离至 `core/node` 子入口避免污染浏览器) | `packages/core/src/fetcher/file.ts` |
 | [x] | `indexDocument` 节点扁平化、parentMap、page 收集 | `packages/core/src/normalize/tree.ts` |
 | [x] | `surveyAssets` 收集 imageRefs 与 vector 导出候选 | `packages/core/src/normalize/assets.ts` |
-| [~] | Component/Instance 主组件引用与 overrides 合并 | 暂时依赖 Figma API 已序列化的 instance children(已含 override),未实现独立的合并逻辑 |
+| [x] | Component/Instance 主组件引用与 overrides 合并 | `packages/core/src/normalize/instances.ts` `resolveInstance()`:无 children 时按 `componentId` 找 master 并克隆子树(id 重映射),并把 `componentProperties`(TEXT / BOOLEAN)沿 `componentPropertyReferences` 应用到后代 |
 
 **注意**:Figma API token 仅在后端使用,不出现在前端代码或 bundle。**[x] 已落实**(token 走 `/api/figma/load`,服务端透传给 `api.figma.com`,不存储)。
 
@@ -57,7 +57,7 @@ figma-render/
 | `VECTOR` / `BOOLEAN_OPERATION` | `<VectorNode>` | [x] | `fillGeometry` → 内联 SVG;否则用 `/v1/images` 导出的 SVG |
 | `TEXT` | `<TextNode>` | [x] | 含混合样式 span 拆分 |
 | `COMPONENT` / `COMPONENT_SET` | `<FrameNode>` | [x] | 等同 Frame |
-| `INSTANCE` | `<InstanceNode>` | [~] | 当前直接复用 Frame 渲染;未自行合并 overrides(Figma API 已合并) |
+| `INSTANCE` | `<InstanceNode>` | [x] | 通过 `resolveInstance` 处理:无 children 时克隆 master 子树并按 `componentProperties` 合并 overrides,然后走 Frame 渲染 |
 | FigJam (`STICKY` 等) | `<ShapeNode>` 兜底 | [~] | 走默认分支不崩,但样式简化 |
 | `SLICE` | `null` | [x] | 不渲染 |
 
@@ -117,7 +117,7 @@ Vite + React,职责:让用户输入来源、加载文档、把数据交给 `<Fig
 | **M4** Auto Layout(flexbox) | [x] | 含 grow / stretch / wrap |
 | **M5** 矢量与图像(Vector/BooleanOp + Image fill) | [x] | 内联 SVG + 导出 SVG 两策略 |
 | **M6** 文本细节(混合样式、字体降级) | [x] | run 拆分 + Helvetica/系统降级栈 |
-| **M7** Component/Instance | [~] | 渲染通过(直接走 Frame),未自行合并 overrides |
+| **M7** Component/Instance | [x] | `resolveInstance` 处理 master 克隆 + `componentProperties`(TEXT / BOOLEAN)合并;`INSTANCE_SWAP` / `VARIANT` 留作后续 |
 | **M8** Effects/Mask/Blend | [~] | Effects + Blend 完成;**Mask 未实现** |
 | **M9** 画布交互(平移缩放 + page) | [x] | 节点 hover/选中未做 |
 | **M10** 打磨与样例 | [~] | README 与 plan 文档存在;**真实 Figma 文件回归未做** |
@@ -155,7 +155,7 @@ Vite + React,职责:让用户输入来源、加载文档、把数据交给 `<Fig
 1. **Mask** (`isMask`) 渲染未实现 — 当前作为普通节点渲染,会出现遮挡偏差。
 2. **Constraints**(非 Auto Layout 父容器下子节点的 LEFT/RIGHT/TOP/BOTTOM/SCALE/STRETCH 锚点)未翻译 — 当前一律按 `relativeTransform` 或 absoluteBoundingBox 差值定位,父容器缩放时不会保持锚点。
 3. **Stroke dashPattern** 仅切换 `dashed` 样式,未根据 `[dash, gap]` 自定义。
-4. **Component / Instance overrides** 没有自行合并逻辑(目前依赖 API 返回已合并的子树)。
+4. **Component / Instance overrides** — TEXT / BOOLEAN 通过 `componentProperties` 已合并;**`INSTANCE_SWAP`** 与 **`VARIANT`** 属性未实现(需要在解析时替换 master 节点本身)。
 5. **节点交互**(hover 高亮、选中、节点检查器)未做。
 6. **真实 Figma 文件视觉回归**未在本仓库环境内执行。
 7. **集成测试**(jsdom + 完整 fixture 渲染)未编写。
