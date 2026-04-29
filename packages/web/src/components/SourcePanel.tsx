@@ -81,7 +81,7 @@ export function SourcePanel() {
           type="file"
           accept=".fig,.figma,.json,application/json"
           onChange={handleFile}
-          style={{ marginTop: 6 }}
+          style={{ marginTop: 6, maxWidth: "100%" }}
         />
       </label>
       {error && <p style={{ color: "#ff7b72", marginTop: 12, fontSize: 12 }}>{error}</p>}
@@ -111,6 +111,10 @@ const inputStyle: React.CSSProperties = {
   color: "#e6e6e6",
   padding: "6px 8px",
   borderRadius: 4,
+  // 限制在父容器内宽度,避免 input 默认 size 导致溢出
+  width: "100%",
+  minWidth: 0,
+  boxSizing: "border-box",
 };
 
 const buttonStyle: React.CSSProperties = {

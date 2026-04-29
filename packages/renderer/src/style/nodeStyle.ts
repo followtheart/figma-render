@@ -85,13 +85,71 @@ export function buildNodeStyle(node: Node, ctx: NodeStyleContext): React.CSSProp
   } else if (parentIsAuto && !isAbsolute) {
     // Flex child: leave positioning to parent flex.
     style.position = "relative";
-    if (n.size) {
-      style.width = round(n.size.x, 3);
-      style.height = round(n.size.y, 3);
-    } else if (n.absoluteBoundingBox) {
-      style.width = round(n.absoluteBoundingBox.width, 3);
-      style.height = round(n.absoluteBoundingBox.height, 3);
+
+    // Width/height from the design-time snapshot.
+    const childW = n.size?.x ?? n.absoluteBoundingBox?.width;
+    const childH = n.size?.y ?? n.absoluteBoundingBox?.height;
+
+    // Geometric fallback for FILL: the .fig binary schema does not expose a
+    // stable "fill container" signal in the type definitions we have access
+    // to. As a heuristic, when a child's declared main-axis size is >= the
+    // parent's available content-box on that axis, treat it as FILL — drop
+    // the explicit size and let flex grow do the work. This catches the very
+    // common case of an INSTANCE master designed at e.g. 400 px placed inside
+    // a 343 px parent, where the author meant "fill the container" but the
+    // sizing flag was lost in conversion.
+    let mainAxisFills = false;
+    let crossAxisFills = false;
+    const parentSize = parent.size ?? parent.absoluteBoundingBox;
+    if (parentSize) {
+      const padX = (parent.paddingLeft ?? 0) + (parent.paddingRight ?? 0);
+      const padY = (parent.paddingTop ?? 0) + (parent.paddingBottom ?? 0);
+      const availX =
+        ((parentSize as { x?: number; width?: number }).x ??
+          (parentSize as { width?: number }).width ??
+          0) - padX;
+      const availY =
+        ((parentSize as { y?: number; height?: number }).y ??
+          (parentSize as { height?: number }).height ??
+          0) - padY;
+      const eps = 0.5;
+      if (parent.layoutMode === "HORIZONTAL") {
+        if (childW != null && availX > 0 && childW >= availX - eps) mainAxisFills = true;
+        if (childH != null && availY > 0 && childH >= availY - eps) crossAxisFills = true;
+      } else {
+        if (childH != null && availY > 0 && childH >= availY - eps) mainAxisFills = true;
+        if (childW != null && availX > 0 && childW >= availX - eps) crossAxisFills = true;
+      }
     }
+
+    if (childW != null && !(mainAxisFills && parent.layoutMode === "HORIZONTAL") &&
+        !(crossAxisFills && parent.layoutMode === "VERTICAL")) {
+      style.width = round(childW, 3);
+    }
+    if (childH != null && !(mainAxisFills && parent.layoutMode === "VERTICAL") &&
+        !(crossAxisFills && parent.layoutMode === "HORIZONTAL")) {
+      style.height = round(childH, 3);
+    }
+
+    // Flex-shrink unlock: default `min-width:auto` resolves to content min size
+    // and blocks shrinking. Cap with `max-*:100%` for the cases where the
+    // explicit size still applies but is larger than the live parent box.
+    if (parent.layoutMode === "HORIZONTAL") {
+      style.minWidth = 0;
+      style.maxWidth = "100%";
+    } else {
+      style.minHeight = 0;
+      style.maxHeight = "100%";
+    }
+
+    if (mainAxisFills) {
+      style.flexGrow = 1;
+      style.flexBasis = 0;
+    }
+    if (crossAxisFills) {
+      style.alignSelf = "stretch";
+    }
+
     Object.assign(
       style,
       autoLayoutChildToCss(n as never, parent.layoutMode as "HORIZONTAL" | "VERTICAL"),

@@ -282,6 +282,21 @@ function convertNode(
   if (node.visible === false) out.visible = false;
   if (node.blendMode) out.blendMode = node.blendMode as string;
 
+  // Frame-like nodes clip children by default in Figma. The fig schema flips
+  // the polarity: `frameMaskDisabled === true` means "do not clip". Emit the
+  // REST-style `clipsContent` so the renderer applies overflow:hidden — without
+  // this, INSTANCE / FRAME contents whose sizes don't match the container
+  // (e.g. master cloned into a smaller instance, or grand-children of an
+  // auto-layout that sum wider than the parent) leak out visibly.
+  const mappedType = mapType(node.type, node);
+  const isFrameLike =
+    mappedType === "FRAME" ||
+    mappedType === "COMPONENT" ||
+    mappedType === "INSTANCE";
+  if (isFrameLike) {
+    out.clipsContent = node.frameMaskDisabled !== true;
+  }
+
   // Geometry: emit both an absolute bounding box (used by the renderer's
   // page-relative positioning) and a relativeTransform / size pair.
   if (w > 0 || h > 0) {
@@ -336,6 +351,15 @@ function convertNode(
     const cAlign = (node as { stackCounterAlignItems?: string }).stackCounterAlignItems;
     if (cAlign) out.counterAxisAlignItems = cAlign;
   }
+
+  // Per-child auto-layout sizing (fields exist on every node; only meaningful
+  // when its parent is auto-layout). Mapping: `stackChildPrimaryGrow:1` means
+  // "fill main axis" (REST `layoutGrow:1`); `stackChildAlignSelf:"STRETCH"`
+  // means "fill cross axis" (REST `layoutAlign:"STRETCH"`).
+  const childGrow = (node as { stackChildPrimaryGrow?: number }).stackChildPrimaryGrow;
+  if (typeof childGrow === "number" && childGrow > 0) out.layoutGrow = childGrow;
+  const childAlign = (node as { stackChildAlignSelf?: string }).stackChildAlignSelf;
+  if (childAlign && childAlign !== "INHERIT" && childAlign !== "AUTO") out.layoutAlign = childAlign;
 
   // Text.
   if (node.type === "TEXT") {

@@ -23,6 +23,9 @@ interface ChildLayoutNode {
   layoutGrow?: number;
   layoutAlign?: LayoutAlign;
   layoutPositioning?: "AUTO" | "ABSOLUTE";
+  // Modern Figma sizing fields (preferred over legacy layoutGrow/layoutAlign).
+  layoutSizingHorizontal?: "FIXED" | "HUG" | "FILL";
+  layoutSizingVertical?: "FIXED" | "HUG" | "FILL";
 }
 
 const AXIS_TO_JUSTIFY: Record<AxisAlign, string> = {
@@ -79,14 +82,56 @@ export function autoLayoutChildToCss(
   parentAxis: "HORIZONTAL" | "VERTICAL",
 ): React.CSSProperties {
   const out: React.CSSProperties = {};
-  if (child.layoutGrow && child.layoutGrow > 0) {
-    out.flexGrow = child.layoutGrow;
-    // Stretching along main axis -> let flex resize.
+  // Modern Figma sizing fields take precedence; map to the same CSS we'd emit
+  // for the legacy `layoutGrow` / `layoutAlign:STRETCH` pair.
+  const fillsMain =
+    child.layoutSizingHorizontal === "FILL" && parentAxis === "HORIZONTAL"
+      ? true
+      : child.layoutSizingVertical === "FILL" && parentAxis === "VERTICAL"
+        ? true
+        : (child.layoutGrow ?? 0) > 0;
+  const fillsCross =
+    child.layoutSizingHorizontal === "FILL" && parentAxis === "VERTICAL"
+      ? true
+      : child.layoutSizingVertical === "FILL" && parentAxis === "HORIZONTAL"
+        ? true
+        : child.layoutAlign === "STRETCH";
+  const hugsMain =
+    child.layoutSizingHorizontal === "HUG" && parentAxis === "HORIZONTAL"
+      ? true
+      : child.layoutSizingVertical === "HUG" && parentAxis === "VERTICAL";
+  const hugsCross =
+    child.layoutSizingHorizontal === "HUG" && parentAxis === "VERTICAL"
+      ? true
+      : child.layoutSizingVertical === "HUG" && parentAxis === "HORIZONTAL";
+
+  if (fillsMain) {
+    out.flexGrow = child.layoutGrow && child.layoutGrow > 0 ? child.layoutGrow : 1;
+    if (parentAxis === "HORIZONTAL") {
+      out.width = "auto";
+      // Allow the flex item to shrink below its intrinsic content width;
+      // otherwise long text/children push it past the parent box.
+      out.minWidth = 0;
+    } else {
+      out.height = "auto";
+      out.minHeight = 0;
+    }
+  }
+  if (fillsCross) {
+    out.alignSelf = "stretch";
+    if (parentAxis === "HORIZONTAL") {
+      out.height = "auto";
+      out.minHeight = 0;
+    } else {
+      out.width = "auto";
+      out.minWidth = 0;
+    }
+  }
+  if (hugsMain) {
     if (parentAxis === "HORIZONTAL") out.width = "auto";
     else out.height = "auto";
   }
-  if (child.layoutAlign === "STRETCH") {
-    out.alignSelf = "stretch";
+  if (hugsCross) {
     if (parentAxis === "HORIZONTAL") out.height = "auto";
     else out.width = "auto";
   }
