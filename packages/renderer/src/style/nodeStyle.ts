@@ -1,0 +1,108 @@
+import type { Node } from "@figma-render/core";
+import { paintsToBackground, type PaintContext } from "./paint.js";
+import { strokeToCss } from "./stroke.js";
+import { effectsToCss } from "./effect.js";
+import { autoLayoutToCss, autoLayoutChildToCss, absolutePositionToCss } from "./layout.js";
+import { cornerRadiusToCss } from "./cornerRadius.js";
+import { blendModeToCss } from "./blend.js";
+import { round } from "./color.js";
+
+export interface NodeStyleContext extends PaintContext {
+  parent?: Node | null;
+  /** True if this node is the page (CANVAS) or the document root. */
+  isRoot?: boolean;
+}
+
+interface NodeWithLayout {
+  visible?: boolean;
+  opacity?: number;
+  blendMode?: string;
+  fills?: unknown;
+  strokes?: unknown;
+  strokeWeight?: number;
+  individualStrokeWeights?: unknown;
+  strokeAlign?: unknown;
+  strokeDashes?: unknown;
+  cornerRadius?: number;
+  rectangleCornerRadii?: unknown;
+  effects?: unknown;
+  layoutMode?: unknown;
+  primaryAxisAlignItems?: unknown;
+  counterAxisAlignItems?: unknown;
+  paddingTop?: number;
+  paddingRight?: number;
+  paddingBottom?: number;
+  paddingLeft?: number;
+  itemSpacing?: number;
+  layoutWrap?: unknown;
+  counterAxisSpacing?: number;
+  layoutGrow?: number;
+  layoutAlign?: unknown;
+  layoutPositioning?: unknown;
+  absoluteBoundingBox?: { x: number; y: number; width: number; height: number } | null;
+  size?: { x: number; y: number };
+  relativeTransform?: readonly (readonly number[])[];
+  clipsContent?: boolean;
+  isMask?: boolean;
+}
+
+/**
+ * Build the full CSS for a node — paints, strokes, corners, effects, layout,
+ * blend mode, transform/positioning, mask. The node-specific components are
+ * thin wrappers around this.
+ */
+export function buildNodeStyle(node: Node, ctx: NodeStyleContext): React.CSSProperties {
+  const n = node as unknown as NodeWithLayout;
+  const style: React.CSSProperties = {};
+
+  if (n.visible === false) style.display = "none";
+  if (typeof n.opacity === "number" && n.opacity < 1) style.opacity = round(n.opacity, 4);
+
+  Object.assign(style, blendModeToCss(n.blendMode as string | undefined));
+  Object.assign(style, paintsToBackground(n.fills as never, ctx));
+  Object.assign(style, strokeToCss(n as never));
+  Object.assign(style, cornerRadiusToCss(n as never));
+
+  const eff = effectsToCss(n.effects as never);
+  if (eff.boxShadow) style.boxShadow = eff.boxShadow;
+  if (eff.filter) style.filter = eff.filter;
+  if (eff.backdropFilter) style.backdropFilter = eff.backdropFilter;
+
+  Object.assign(style, autoLayoutToCss(n as never));
+
+  // Position relative to parent.
+  const parent = ctx.parent as unknown as NodeWithLayout | null | undefined;
+  const parentIsAuto = parent?.layoutMode === "HORIZONTAL" || parent?.layoutMode === "VERTICAL";
+  const isAbsolute = n.layoutPositioning === "ABSOLUTE";
+
+  if (ctx.isRoot) {
+    // Root page: relative; size from bounding box if available.
+    style.position = "relative";
+    if (n.absoluteBoundingBox) {
+      style.width = round(n.absoluteBoundingBox.width, 3);
+      style.height = round(n.absoluteBoundingBox.height, 3);
+    }
+  } else if (parentIsAuto && !isAbsolute) {
+    // Flex child: leave positioning to parent flex.
+    style.position = "relative";
+    if (n.size) {
+      style.width = round(n.size.x, 3);
+      style.height = round(n.size.y, 3);
+    } else if (n.absoluteBoundingBox) {
+      style.width = round(n.absoluteBoundingBox.width, 3);
+      style.height = round(n.absoluteBoundingBox.height, 3);
+    }
+    Object.assign(
+      style,
+      autoLayoutChildToCss(n as never, parent.layoutMode as "HORIZONTAL" | "VERTICAL"),
+    );
+  } else {
+    Object.assign(style, absolutePositionToCss(n as never, (parent ?? {}) as never));
+  }
+
+  if (n.clipsContent) style.overflow = "hidden";
+  // box-sizing: border-box keeps inside-strokes and padding inside the bbox.
+  style.boxSizing = "border-box";
+
+  return style;
+}
