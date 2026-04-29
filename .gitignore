@@ -13,5 +13,6 @@ coverage/
 .env.*.local
 .vite/
 .pnpm-store/
+*.tsbuildinfo
 .idea/
 .vscode/
